@@ -4,6 +4,7 @@ python-dotenv
 hopsworks
 pyarrow
 deltalake
+confluent-kafka
 scikit-learn
 tensorflow
 shap
