@@ -2,6 +2,8 @@ requests
 pandas
 python-dotenv
 hopsworks
+pyarrow
+deltalake
 scikit-learn
 tensorflow
 shap
