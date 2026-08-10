@@ -1,0 +1,11 @@
+requests
+pandas
+python-dotenv
+hopsworks
+scikit-learn
+tensorflow
+shap
+flask
+flask-cors
+joblib
+numpy
