@@ -40,7 +40,7 @@ CITY_LAT = float(os.environ.get("CITY_LAT", 24.8607))
 CITY_LON = float(os.environ.get("CITY_LON", 67.0011))
 
 FEATURE_GROUP_NAME = "aqi_features"
-FEATURE_GROUP_VERSION = 3
+FEATURE_GROUP_VERSION = 4
 
 
 def fetch_aqi_data(city: str) -> dict:
@@ -167,7 +167,7 @@ def push_to_feature_store(df: pd.DataFrame):
         description="AQI + weather features for forecasting",
         primary_key=["city", "event_time"],
         event_time="event_time",
-        time_travel_format="DELTA",
+        time_travel_format="HUDI",
     )
 
     # Recompute change rate using the true previous value from the store
