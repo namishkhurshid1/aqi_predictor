@@ -33,11 +33,11 @@ except ImportError:
 HOPSWORKS_API_KEY = os.environ.get("HOPSWORKS_API_KEY")
 CITY_NAME = os.environ.get("CITY_NAME", "Karachi")
 FEATURE_GROUP_NAME = "aqi_features"
-FEATURE_GROUP_VERSION = 1
+FEATURE_GROUP_VERSION = 4
 MODEL_NAME = "aqi_forecast_model"
 
 FEATURE_COLUMNS = [
-    "pm25", "pm10", "o3", "no2", "so2", "co",
+    "pm25",
     "temperature", "humidity", "pressure", "wind_speed", "wind_deg", "clouds",
     "hour", "day", "day_of_week", "month", "aqi_change_rate",
 ]
