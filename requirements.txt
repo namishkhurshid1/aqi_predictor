@@ -10,5 +10,6 @@ tensorflow
 shap
 flask
 flask-cors
+gunicorn
 joblib
 numpy
