@@ -1,11 +1,4 @@
-import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  Tooltip,
-  ResponsiveContainer,
-} from 'recharts'
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
 
 export default function ShapCard({ shapData }) {
   if (!shapData) return null
@@ -19,12 +12,25 @@ export default function ShapCard({ shapData }) {
       <h2>Feature Importance (SHAP)</h2>
       <ResponsiveContainer width="100%" height={260}>
         <BarChart data={data} layout="vertical" margin={{ left: 20 }}>
-          <XAxis type="number" stroke="#8b93a7" fontSize={12} />
-          <YAxis dataKey="feature" type="category" stroke="#8b93a7" fontSize={12} width={80} />
-          <Tooltip
-            contentStyle={{ background: '#171a21', border: '1px solid #262b36' }}
+          <XAxis type="number" stroke="#a8a196" fontSize={11} fontFamily="IBM Plex Mono, monospace" />
+          <YAxis
+            dataKey="feature"
+            type="category"
+            stroke="#a8a196"
+            fontSize={11}
+            fontFamily="IBM Plex Mono, monospace"
+            width={80}
           />
-          <Bar dataKey="importance" fill="#4f8cff" radius={[0, 6, 6, 0]} />
+          <Tooltip
+            contentStyle={{
+              background: '#1b222c',
+              border: '1px solid #2a3441',
+              borderRadius: 8,
+              fontFamily: 'IBM Plex Mono, monospace',
+              fontSize: 12,
+            }}
+          />
+          <Bar dataKey="importance" fill="#d98e3f" radius={[0, 6, 6, 0]} />
         </BarChart>
       </ResponsiveContainer>
     </div>
