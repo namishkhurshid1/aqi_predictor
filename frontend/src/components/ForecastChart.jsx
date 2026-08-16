@@ -1,6 +1,6 @@
 import {
-  LineChart,
-  Line,
+  AreaChart,
+  Area,
   XAxis,
   YAxis,
   Tooltip,
@@ -8,7 +8,7 @@ import {
   ResponsiveContainer,
 } from 'recharts'
 
-export default function ForecastChart({ current, forecast }) {
+export default function ForecastChart({ current, forecast, color }) {
   if (!current || !forecast || !forecast.length) return null
 
   const data = [
@@ -20,21 +20,39 @@ export default function ForecastChart({ current, forecast }) {
     <div className="card">
       <h2>AQI Trend</h2>
       <ResponsiveContainer width="100%" height={220}>
-        <LineChart data={data}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#262b36" />
-          <XAxis dataKey="date" stroke="#8b93a7" fontSize={12} />
-          <YAxis stroke="#8b93a7" fontSize={12} />
-          <Tooltip
-            contentStyle={{ background: '#171a21', border: '1px solid #262b36' }}
+        <AreaChart data={data}>
+          <defs>
+            <linearGradient id="aqiFill" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor={color} stopOpacity={0.35} />
+              <stop offset="100%" stopColor={color} stopOpacity={0} />
+            </linearGradient>
+          </defs>
+          <CartesianGrid strokeDasharray="3 3" stroke="#2a3441" />
+          <XAxis
+            dataKey="date"
+            stroke="#a8a196"
+            fontSize={11}
+            fontFamily="IBM Plex Mono, monospace"
           />
-          <Line
+          <YAxis stroke="#a8a196" fontSize={11} fontFamily="IBM Plex Mono, monospace" />
+          <Tooltip
+            contentStyle={{
+              background: '#1b222c',
+              border: '1px solid #2a3441',
+              borderRadius: 8,
+              fontFamily: 'IBM Plex Mono, monospace',
+              fontSize: 12,
+            }}
+          />
+          <Area
             type="monotone"
             dataKey="aqi"
-            stroke="#4f8cff"
+            stroke={color}
             strokeWidth={2}
-            dot={{ r: 4 }}
+            fill="url(#aqiFill)"
+            dot={{ r: 3, fill: color }}
           />
-        </LineChart>
+        </AreaChart>
       </ResponsiveContainer>
     </div>
   )
