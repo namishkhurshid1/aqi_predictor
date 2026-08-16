@@ -1,6 +1,9 @@
 import { useEffect, useState } from 'react'
 import { api } from './api'
-import CurrentAqiCard from './components/CurrentAqiCard.jsx'
+import Gauge from './components/Gauge.jsx'
+import HazeField from './components/HazeField.jsx'
+import PollutantStrip from './components/PollutantStrip.jsx'
+import ConditionsStrip from './components/ConditionsStrip.jsx'
 import ForecastCard from './components/ForecastCard.jsx'
 import ForecastChart from './components/ForecastChart.jsx'
 import ShapCard from './components/ShapCard.jsx'
@@ -13,6 +16,7 @@ export default function App() {
   const [metrics, setMetrics] = useState(null)
   const [error, setError] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [now, setNow] = useState(new Date())
 
   async function loadAll() {
     try {
@@ -25,7 +29,6 @@ export default function App() {
       setCurrent(currentRes)
       setForecast(forecastRes.forecast)
 
-      // these are optional — dashboard still works before first training run
       api.shap().then(setShap).catch(() => setShap(null))
       api.metrics().then(setMetrics).catch(() => setMetrics(null))
     } catch (e) {
@@ -37,43 +40,74 @@ export default function App() {
 
   useEffect(() => {
     loadAll()
-    const interval = setInterval(loadAll, 5 * 60 * 1000) // refresh every 5 min
-    return () => clearInterval(interval)
+    const dataInterval = setInterval(loadAll, 5 * 60 * 1000)
+    const clockInterval = setInterval(() => setNow(new Date()), 1000)
+    return () => {
+      clearInterval(dataInterval)
+      clearInterval(clockInterval)
+    }
   }, [])
 
   return (
     <div className="app">
-      <div className="header">
-        <h1>Pearls AQI Predictor</h1>
-        <div className="city">{current?.city ?? ''}</div>
+      <div className="statusbar">
+        <div className="brand">
+          <span className="brand-mark" />
+          <h1>Pearls AQI</h1>
+          <span className="tag">Monitoring Station</span>
+        </div>
+        <div className="right">
+          <span className="city">{current?.city ?? '—'}</span>
+          <span>{now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span>
+        </div>
       </div>
 
-      {loading && <div className="loading">Loading latest data...</div>}
+      {loading && !current && <div className="loading">Reading sensor data…</div>}
       {error && (
         <div className="error">
           {error}
-          <div style={{ marginTop: 8 }}>
-            Make sure the Flask API is running on port 5000.
+          <div style={{ marginTop: 8, fontSize: 11 }}>
+            Make sure the Flask API is running.
           </div>
         </div>
       )}
 
-      {!loading && !error && (
+      {current && (
         <>
+          <div className="panel-header">
+            <HazeField aqi={current.aqi} color={current.alert.color} />
+            <div className="panel-header-inner">
+              <Gauge value={current.aqi} color={current.alert.color} label={current.alert.level} />
+              <div>
+                <div className="readout-eyebrow">Current Reading — {current.city}</div>
+                <div className="readout-headline">
+                  Air quality is{' '}
+                  <span style={{ color: current.alert.color }}>{current.alert.level.toLowerCase()}</span>
+                  {' '}right now.
+                </div>
+                {current.alert.hazardous && (
+                  <div className="alert-banner">⚠ Limit outdoor exposure until levels drop.</div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          <PollutantStrip data={current} />
+          <ConditionsStrip data={current} />
+
           <div className="grid">
-            <CurrentAqiCard data={current} />
             <ForecastCard forecast={forecast} />
+            <ForecastChart current={current} forecast={forecast} color={current.alert.color} />
           </div>
           <div className="grid">
-            <ForecastChart current={current} forecast={forecast} />
             <ShapCard shapData={shap} />
+            <MetricsCard metrics={metrics} />
           </div>
-          <MetricsCard metrics={metrics} />
         </>
       )}
 
       <div className="footer-note">
-        Pearls AQI Predictor — serverless AQI forecasting pipeline
+        Pearls AQI Predictor — serverless forecasting pipeline · updates every hour
       </div>
     </div>
   )
