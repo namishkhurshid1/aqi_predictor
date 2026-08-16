@@ -5,10 +5,8 @@ export default function MetricsCard({ metrics }) {
     <div className="card">
       <h2>Model Comparison</h2>
       {Object.entries(metrics).map(([name, m]) => (
-        <div key={name} style={{ marginBottom: 14 }}>
-          <div style={{ fontWeight: 600, marginBottom: 4, textTransform: 'capitalize' }}>
-            {name.replace('_', ' ')}
-          </div>
+        <div key={name} className="model-block">
+          <div className="model-name">{name.replace('_', ' ')}</div>
           <div className="metrics-row">
             <div className="metric">
               <div className="label">RMSE</div>
