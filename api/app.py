@@ -133,9 +133,15 @@ def current():
         "aqi": float(row["aqi"]),
         "pm25": float(row["pm25"]) if pd.notna(row["pm25"]) else None,
         "pm10": float(row["pm10"]) if pd.notna(row["pm10"]) else None,
+        "o3": float(row["o3"]) if pd.notna(row["o3"]) else None,
+        "no2": float(row["no2"]) if pd.notna(row["no2"]) else None,
+        "so2": float(row["so2"]) if pd.notna(row["so2"]) else None,
+        "co": float(row["co"]) if pd.notna(row["co"]) else None,
         "temperature": float(row["temperature"]),
         "humidity": float(row["humidity"]),
+        "pressure": float(row["pressure"]) if pd.notna(row["pressure"]) else None,
         "wind_speed": float(row["wind_speed"]),
+        "clouds": float(row["clouds"]) if pd.notna(row["clouds"]) else None,
     }
     result["alert"] = classify_aqi(result["aqi"])
     return jsonify(result)
@@ -168,7 +174,6 @@ def forecast():
             "alert": classify_aqi(pred_aqi),
         })
 
-        # feed prediction back in as the change-rate basis for the next day
         working_row["aqi_change_rate"] = pred_aqi - working_row["aqi"].values[0]
         working_row["aqi"] = pred_aqi
 
@@ -196,4 +201,5 @@ def metrics():
 
 
 if __name__ == "__main__":
-    app.run(debug=True, port=5000)
+    port = int(os.environ.get("PORT", 5000))
+    app.run(debug=True, host="0.0.0.0", port=port)
