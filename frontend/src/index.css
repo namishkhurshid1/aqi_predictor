@@ -59,6 +59,11 @@ body {
   font-size: 18px;
 }
 
+.navbar .brand-logo {
+  height: 26px;
+  width: auto;
+}
+
 .navbar .brand-dot {
   width: 9px;
   height: 9px;
