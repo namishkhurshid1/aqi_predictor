@@ -1,13 +1,18 @@
 import { useEffect, useState } from 'react'
 import { api } from './api'
-import Gauge from './components/Gauge.jsx'
-import HazeField from './components/HazeField.jsx'
+import Navbar from './components/Navbar.jsx'
+import GlobeView from './components/GlobeView.jsx'
+import StatCard from './components/StatCard.jsx'
 import PollutantStrip from './components/PollutantStrip.jsx'
 import ConditionsStrip from './components/ConditionsStrip.jsx'
 import ForecastCard from './components/ForecastCard.jsx'
 import ForecastChart from './components/ForecastChart.jsx'
 import ShapCard from './components/ShapCard.jsx'
 import MetricsCard from './components/MetricsCard.jsx'
+
+// City coordinates for the globe marker — update if you change CITY_NAME
+// in your .env, since the API doesn't currently return lat/lon.
+const CITY_COORDS = { lat: 24.8607, lon: 67.0011 }
 
 export default function App() {
   const [current, setCurrent] = useState(null)
@@ -48,19 +53,11 @@ export default function App() {
     }
   }, [])
 
+  const riskPct = current ? Math.min(100, Math.round((current.aqi / 300) * 100)) : 0
+
   return (
     <div className="app">
-      <div className="statusbar">
-        <div className="brand">
-          <span className="brand-mark" />
-          <h1>Pearls AQI</h1>
-          <span className="tag">Monitoring Station</span>
-        </div>
-        <div className="right">
-          <span className="city">{current?.city ?? '—'}</span>
-          <span>{now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span>
-        </div>
-      </div>
+      <Navbar city={current?.city} now={now} />
 
       {loading && !current && <div className="loading">Reading sensor data…</div>}
       {error && (
@@ -74,22 +71,44 @@ export default function App() {
 
       {current && (
         <>
-          <div className="panel-header">
-            <HazeField aqi={current.aqi} color={current.alert.color} />
-            <div className="panel-header-inner">
-              <Gauge value={current.aqi} color={current.alert.color} label={current.alert.level} />
-              <div>
-                <div className="readout-eyebrow">Current Reading — {current.city}</div>
-                <div className="readout-headline">
-                  Air quality is{' '}
-                  <span style={{ color: current.alert.color }}>{current.alert.level.toLowerCase()}</span>
-                  {' '}right now.
-                </div>
-                {current.alert.hazardous && (
-                  <div className="alert-banner">⚠ Limit outdoor exposure until levels drop.</div>
-                )}
+          <div className="hero">
+            <div>
+              <div className="hero-eyebrow">Live Air Quality Monitoring</div>
+              <h1>
+                Air Quality <span>Index</span>
+              </h1>
+              <div className="hero-meta">
+                {now.toLocaleDateString()} {now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} · {current.city}
               </div>
+
+              <div className="stat-cards">
+                <StatCard
+                  label="Main Statistics"
+                  big={Math.round(current.aqi)}
+                  sub={`Dominant pollutant: PM2.5`}
+                  pill={current.alert.level}
+                  pillColor={current.alert.color}
+                />
+                <StatCard
+                  label="Risk of Pollution"
+                  big={`${riskPct}%`}
+                  sub={current.alert.hazardous ? 'High risk — limit outdoor exposure' : 'Moderate risk based on current conditions'}
+                  pill={current.alert.hazardous ? 'Hazardous' : 'Monitor'}
+                  pillColor={current.alert.color}
+                />
+              </div>
+
+              {current.alert.hazardous && (
+                <div className="alert-banner">⚠ Limit outdoor exposure until levels drop.</div>
+              )}
             </div>
+
+            <GlobeView
+              lat={CITY_COORDS.lat}
+              lon={CITY_COORDS.lon}
+              color={current.alert.color}
+              city={current.city}
+            />
           </div>
 
           <PollutantStrip data={current} />
