@@ -1,17 +1,17 @@
 """
-Flask API
----------
+Flask API (multi-city)
+------------------------
 Loads the latest model from the Hopsworks Model Registry and the latest
 features from the Feature Store, and serves:
   GET  /api/health
-  GET  /api/current       -> latest raw AQI + weather reading
-  GET  /api/forecast      -> 3-day AQI forecast
-  GET  /api/shap          -> SHAP feature importance (from last training run)
-  GET  /api/alert         -> hazard alert level for the current AQI
+  GET  /api/cities                 -> list of tracked cities
+  GET  /api/current?city=Karachi   -> latest raw AQI + weather reading
+  GET  /api/forecast?city=Karachi  -> 3-day AQI forecast
+  GET  /api/shap                   -> SHAP feature importance (from last training run)
+  GET  /api/metrics                -> model comparison metrics
 
 Run:
     python api/app.py
-    (serves on http://localhost:5000)
 """
 
 import os
@@ -20,7 +20,7 @@ import joblib
 import numpy as np
 import pandas as pd
 from datetime import datetime, timedelta, timezone
-from flask import Flask, jsonify
+from flask import Flask, jsonify, request
 from flask_cors import CORS
 
 try:
@@ -30,16 +30,26 @@ except ImportError:
     pass
 
 HOPSWORKS_API_KEY = os.environ.get("HOPSWORKS_API_KEY")
-CITY_NAME = os.environ.get("CITY_NAME", "Karachi")
 FEATURE_GROUP_NAME = "aqi_features"
 FEATURE_GROUP_VERSION = 4
 MODEL_NAME = "aqi_forecast_model"
 
-FEATURE_COLUMNS = [
+# Must match src/feature_pipeline.py and src/training_pipeline.py.
+CITIES = [
+    {"name": "Karachi", "lat": 24.8607, "lon": 67.0011},
+    {"name": "Lahore", "lat": 31.5497, "lon": 74.3436},
+    {"name": "Islamabad", "lat": 33.6844, "lon": 73.0479},
+]
+CITY_LIST = ["Islamabad", "Karachi", "Lahore"]  # alphabetical, matches training
+DEFAULT_CITY = "Karachi"
+
+BASE_FEATURE_COLUMNS = [
     "pm25",
     "temperature", "humidity", "pressure", "wind_speed", "wind_deg", "clouds",
     "hour", "day", "day_of_week", "month", "aqi_change_rate",
 ]
+CITY_COLUMNS = [f"city_{c}" for c in CITY_LIST]
+FEATURE_COLUMNS = BASE_FEATURE_COLUMNS + CITY_COLUMNS
 
 AQI_BREAKPOINTS = [
     (0, 50, "Good", "#00e400"),
@@ -53,7 +63,7 @@ AQI_BREAKPOINTS = [
 app = Flask(__name__)
 CORS(app)
 
-_cache = {"project": None, "model_bundle": None, "model_dir": None}
+_cache = {"project": None, "model_bundle": None}
 
 
 def get_hopsworks_project():
@@ -63,17 +73,22 @@ def get_hopsworks_project():
     return _cache["project"]
 
 
-def get_latest_features(n=1) -> pd.DataFrame:
+def get_latest_features_for_city(city: str, n=1) -> pd.DataFrame:
     project = get_hopsworks_project()
     fs = project.get_feature_store()
     fg = fs.get_feature_group(name=FEATURE_GROUP_NAME, version=FEATURE_GROUP_VERSION)
     df = fg.read()
-    df = df.sort_values("event_time")
+    df = df[df["city"] == city].sort_values("event_time")
     return df.tail(n)
 
 
+def add_city_dummies(row: pd.DataFrame, city: str) -> pd.DataFrame:
+    for c in CITY_LIST:
+        row[f"city_{c}"] = 1.0 if c == city else 0.0
+    return row
+
+
 def get_model_bundle():
-    """Downloads (once, cached) the latest model version from the registry."""
     if _cache["model_bundle"] is not None:
         return _cache["model_bundle"]
 
@@ -81,7 +96,6 @@ def get_model_bundle():
     mr = project.get_model_registry()
     model = mr.get_best_model(MODEL_NAME, "rmse", "min")
     model_dir = model.download()
-    _cache["model_dir"] = model_dir
 
     bundle_path = os.path.join(model_dir, "model.pkl")
     bundle = joblib.load(bundle_path)
@@ -116,19 +130,31 @@ def classify_aqi(aqi: float) -> dict:
     return {"level": "Unknown", "color": "#999999", "hazardous": False}
 
 
+def resolve_city() -> str:
+    city = request.args.get("city", DEFAULT_CITY)
+    valid_names = [c["name"] for c in CITIES]
+    return city if city in valid_names else DEFAULT_CITY
+
+
 @app.route("/api/health")
 def health():
     return jsonify({"status": "ok", "time": datetime.now(timezone.utc).isoformat()})
 
 
+@app.route("/api/cities")
+def cities():
+    return jsonify({"cities": CITIES})
+
+
 @app.route("/api/current")
 def current():
-    df = get_latest_features(n=1)
+    city = resolve_city()
+    df = get_latest_features_for_city(city, n=1)
     if df.empty:
-        return jsonify({"error": "No data yet"}), 404
+        return jsonify({"error": f"No data yet for {city}"}), 404
     row = df.iloc[0]
     result = {
-        "city": CITY_NAME,
+        "city": city,
         "event_time": str(row["event_time"]),
         "aqi": float(row["aqi"]),
         "pm25": float(row["pm25"]) if pd.notna(row["pm25"]) else None,
@@ -149,11 +175,13 @@ def current():
 
 @app.route("/api/forecast")
 def forecast():
-    df = get_latest_features(n=1)
+    city = resolve_city()
+    df = get_latest_features_for_city(city, n=1)
     if df.empty:
-        return jsonify({"error": "No data yet"}), 404
+        return jsonify({"error": f"No data yet for {city}"}), 404
 
     latest_row = df.iloc[[0]].copy()
+    latest_row = add_city_dummies(latest_row, city)
     bundle = get_model_bundle()
 
     forecasts = []
@@ -177,7 +205,7 @@ def forecast():
         working_row["aqi_change_rate"] = pred_aqi - working_row["aqi"].values[0]
         working_row["aqi"] = pred_aqi
 
-    return jsonify({"city": CITY_NAME, "forecast": forecasts})
+    return jsonify({"city": city, "forecast": forecasts})
 
 
 @app.route("/api/shap")
