@@ -1,9 +1,12 @@
 """
-Training Pipeline
-------------------
-1. Fetches historical (features, targets) from the Hopsworks Feature Store.
-2. Trains & evaluates several models (Ridge, Random Forest, LSTM).
-3. Picks the best model by RMSE, computes SHAP values for the tree model,
+Training Pipeline (multi-city)
+--------------------------------
+1. Fetches historical (features, targets) for ALL cities from the Hopsworks
+   Feature Store.
+2. Encodes city as a one-hot feature so a single model learns city-specific
+   patterns.
+3. Trains & evaluates several models (Ridge, Random Forest, LSTM).
+4. Picks the best model by RMSE, computes SHAP values for the tree model,
    and pushes the winning model to the Hopsworks Model Registry.
 
 Run:
@@ -20,7 +23,6 @@ import shap
 
 from sklearn.linear_model import Ridge
 from sklearn.ensemble import RandomForestRegressor
-from sklearn.model_selection import train_test_split
 from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
 from sklearn.preprocessing import StandardScaler
 
@@ -31,17 +33,30 @@ except ImportError:
     pass
 
 HOPSWORKS_API_KEY = os.environ.get("HOPSWORKS_API_KEY")
-CITY_NAME = os.environ.get("CITY_NAME", "Karachi")
 FEATURE_GROUP_NAME = "aqi_features"
 FEATURE_GROUP_VERSION = 4
 MODEL_NAME = "aqi_forecast_model"
 
-FEATURE_COLUMNS = [
+# Fixed, known city list (kept in sync with src/feature_pipeline.py and
+# api/app.py) so the one-hot columns built here always match what the API
+# builds at inference time, regardless of which cities happen to have rows
+# in the current training data.
+CITY_LIST = ["Islamabad", "Karachi", "Lahore"]
+
+BASE_FEATURE_COLUMNS = [
     "pm25",
     "temperature", "humidity", "pressure", "wind_speed", "wind_deg", "clouds",
     "hour", "day", "day_of_week", "month", "aqi_change_rate",
 ]
+CITY_COLUMNS = [f"city_{c}" for c in CITY_LIST]
+FEATURE_COLUMNS = BASE_FEATURE_COLUMNS + CITY_COLUMNS
 TARGET_COLUMN = "aqi"
+
+
+def add_city_dummies(df: pd.DataFrame) -> pd.DataFrame:
+    for c in CITY_LIST:
+        df[f"city_{c}"] = (df["city"] == c).astype(float)
+    return df
 
 
 def load_features_from_hopsworks() -> pd.DataFrame:
@@ -51,7 +66,8 @@ def load_features_from_hopsworks() -> pd.DataFrame:
     fs = project.get_feature_store()
     fg = fs.get_feature_group(name=FEATURE_GROUP_NAME, version=FEATURE_GROUP_VERSION)
     df = fg.read()
-    df = df.dropna(subset=FEATURE_COLUMNS + [TARGET_COLUMN])
+    df = add_city_dummies(df)
+    df = df.dropna(subset=BASE_FEATURE_COLUMNS + [TARGET_COLUMN])
     return df, project
 
 
@@ -59,7 +75,6 @@ def make_train_test(df: pd.DataFrame):
     df = df.sort_values("event_time")
     X = df[FEATURE_COLUMNS]
     y = df[TARGET_COLUMN]
-    # time-ordered split (no shuffling) since this is a time series
     split_idx = int(len(df) * 0.8)
     X_train, X_test = X.iloc[:split_idx], X.iloc[split_idx:]
     y_train, y_test = y.iloc[:split_idx], y.iloc[split_idx:]
@@ -95,8 +110,7 @@ def train_random_forest(X_train, y_train, X_test, y_test):
 
 
 def train_lstm(X_train, y_train, X_test, y_test):
-    """Simple LSTM over the feature vector treated as a single-timestep sequence.
-    With more history you can reshape this into true multi-step sequences."""
+    """Simple LSTM over the feature vector treated as a single-timestep sequence."""
     import tensorflow as tf
     from tensorflow.keras import layers, models
 
@@ -136,13 +150,14 @@ def main():
 
     print("Loading features from Hopsworks...")
     df, project = load_features_from_hopsworks()
-    print(f"Loaded {len(df)} rows.")
+    print(f"Loaded {len(df)} rows across cities: {sorted(df['city'].unique().tolist())}")
 
-    if len(df) < 20:
+    if len(df) < 30:
         print(
-            f"WARNING: only {len(df)} rows available. Models will train but "
-            "results won't be meaningful yet — keep the hourly feature pipeline "
-            "running for a few days/weeks before trusting these numbers."
+            f"WARNING: only {len(df)} rows available across all cities. Models "
+            "will train but results won't be meaningful yet — keep the hourly "
+            "feature pipeline running for a few days/weeks before trusting "
+            "these numbers."
         )
 
     X_train, X_test, y_train, y_test = make_train_test(df)
@@ -159,7 +174,6 @@ def main():
     results["random_forest"] = rf_metrics
     print(rf_metrics)
 
-    lstm_metrics = None
     try:
         print("Training LSTM...")
         lstm_model, lstm_scaler, lstm_metrics = train_lstm(X_train, y_train, X_test, y_test)
@@ -168,7 +182,6 @@ def main():
     except Exception as e:
         print(f"Skipping LSTM (likely too little data or TF not installed): {e}")
 
-    # pick best by RMSE
     best_name = min(results, key=lambda k: results[k]["rmse"])
     print(f"\nBest model: {best_name} -> {results[best_name]}")
 
@@ -176,13 +189,11 @@ def main():
     with open("artifacts/metrics.json", "w") as f:
         json.dump(results, f, indent=2)
 
-    # compute SHAP importance from the RF model regardless of winner (for the dashboard)
     shap_importance = compute_shap_summary(rf_model, X_train)
     with open("artifacts/shap_importance.json", "w") as f:
         json.dump(shap_importance, f, indent=2)
     print(f"SHAP feature importance: {shap_importance}")
 
-    # save the winning model locally, then push to registry
     if best_name == "ridge":
         joblib.dump({"model": ridge_model, "scaler": ridge_scaler}, "artifacts/model.pkl")
         model_type = "sklearn_ridge"
@@ -203,7 +214,7 @@ def push_model_to_registry(project, model_type: str, metrics: dict):
     model = mr.python.create_model(
         name=MODEL_NAME,
         metrics=metrics,
-        description=f"AQI forecast model ({model_type}) for {CITY_NAME}",
+        description=f"AQI forecast model ({model_type}), multi-city: {', '.join(CITY_LIST)}",
     )
     model.save("artifacts")
     print(f"Model pushed to registry as '{MODEL_NAME}' with metrics {metrics}")
