@@ -1,21 +1,22 @@
 """
-Feature Pipeline
------------------
-1. Fetches raw weather data (OpenWeather) and pollution/AQI data (AQICN) for a city.
-2. Computes model-input features (time-based + derived) and the target (AQI).
-3. Writes the resulting feature row to a Hopsworks Feature Group.
+Feature Pipeline (multi-city)
+------------------------------
+1. Fetches raw weather data (OpenWeather) and pollution/AQI data (AQICN) for
+   each city in CITIES.
+2. Computes model-input features (time-based + derived) and the target (AQI)
+   for each city.
+3. Writes all rows in one batch to a Hopsworks Feature Group. The Feature
+   Group's primary key is (city, event_time), so multiple cities coexist in
+   the same table.
 
 Run manually first to validate:
     python src/feature_pipeline.py
 
-Environment variables required (set locally in a .env file, and as GitHub Secrets
-for automated runs):
+Environment variables required (set locally in a .env file, and as GitHub
+Secrets for automated runs):
     HOPSWORKS_API_KEY
     AQICN_TOKEN
     OPENWEATHER_API_KEY
-    CITY_NAME        e.g. "Karachi"
-    CITY_LAT         e.g. 24.8607
-    CITY_LON         e.g. 67.0011
 """
 
 import os
@@ -25,7 +26,6 @@ import numpy as np
 import pandas as pd
 from datetime import datetime, timezone
 
-# ---- Load .env locally (no-op in GitHub Actions, where secrets are injected directly) ----
 try:
     from dotenv import load_dotenv
     load_dotenv()
@@ -35,17 +35,25 @@ except ImportError:
 AQICN_TOKEN = os.environ.get("AQICN_TOKEN")
 OPENWEATHER_API_KEY = os.environ.get("OPENWEATHER_API_KEY")
 HOPSWORKS_API_KEY = os.environ.get("HOPSWORKS_API_KEY")
-CITY_NAME = os.environ.get("CITY_NAME", "Karachi")
-CITY_LAT = float(os.environ.get("CITY_LAT", 24.8607))
-CITY_LON = float(os.environ.get("CITY_LON", 67.0011))
+
+# The three cities this project tracks. Add/remove entries here to change
+# coverage — everything downstream (training, API, frontend) reads the
+# "city" column rather than hardcoding a single city.
+CITIES = [
+    {"name": "Karachi", "lat": 24.8607, "lon": 67.0011},
+    {"name": "Lahore", "lat": 31.5497, "lon": 74.3436},
+    {"name": "Islamabad", "lat": 33.6844, "lon": 73.0479},
+]
 
 FEATURE_GROUP_NAME = "aqi_features"
 FEATURE_GROUP_VERSION = 4
 
 
-def fetch_aqi_data(city: str) -> dict:
-    """Fetch current AQI + pollutant breakdown from AQICN."""
-    url = f"https://api.waqi.info/feed/{city}/?token={AQICN_TOKEN}"
+def fetch_aqi_data(lat: float, lon: float) -> dict:
+    """Fetch current AQI + pollutant breakdown from AQICN using the nearest
+    station to (lat, lon). Geo-based lookup is more reliable across cities
+    than matching on city name text."""
+    url = f"https://api.waqi.info/feed/geo:{lat};{lon}/?token={AQICN_TOKEN}"
     resp = requests.get(url, timeout=15)
     resp.raise_for_status()
     data = resp.json()
@@ -100,14 +108,14 @@ def _to_float(value):
         return np.nan
 
 
-def build_feature_row(aqi_data: dict, weather_data: dict, previous_aqi: float | None) -> pd.DataFrame:
-    """Combine raw data into a single feature row with time-based + derived features."""
+def build_feature_row(city_name: str, aqi_data: dict, weather_data: dict, previous_aqi) -> dict:
+    """Combine raw data into a single feature row (as a dict) with
+    time-based + derived features."""
     now = datetime.now(timezone.utc)
 
-    row = {
+    return {
         "event_time": now,
-        "city": CITY_NAME,
-        # --- raw pollutant / weather features ---
+        "city": city_name,
         "aqi": _to_float(aqi_data["aqi"]),
         "pm25": _to_float(aqi_data["pm25"]),
         "pm10": _to_float(aqi_data["pm10"]),
@@ -115,47 +123,38 @@ def build_feature_row(aqi_data: dict, weather_data: dict, previous_aqi: float | 
         "no2": _to_float(aqi_data["no2"]),
         "so2": _to_float(aqi_data["so2"]),
         "co": _to_float(aqi_data["co"]),
-        "temperature": weather_data["temperature"],
-        "humidity": weather_data["humidity"],
-        "pressure": weather_data["pressure"],
-        "wind_speed": weather_data["wind_speed"],
-        "wind_deg": weather_data["wind_deg"],
-        "clouds": weather_data["clouds"],
-        # --- time-based features ---
+        "temperature": _to_float(weather_data["temperature"]),
+        "humidity": _to_float(weather_data["humidity"]),
+        "pressure": _to_float(weather_data["pressure"]),
+        "wind_speed": _to_float(weather_data["wind_speed"]),
+        "wind_deg": _to_float(weather_data["wind_deg"]),
+        "clouds": _to_float(weather_data["clouds"]),
         "hour": now.hour,
         "day": now.day,
         "day_of_week": now.weekday(),
         "month": now.month,
-        # --- derived features ---
         "aqi_change_rate": (
-            (aqi_data["aqi"] - previous_aqi) if previous_aqi is not None else 0.0
+            (aqi_data["aqi"] - previous_aqi) if previous_aqi is not None and aqi_data["aqi"] is not None else 0.0
         ),
     }
-    df = pd.DataFrame([row])
-
-    float_cols = [
-        "aqi", "pm25", "pm10", "o3", "no2", "so2", "co",
-        "temperature", "humidity", "pressure", "wind_speed", "wind_deg",
-        "clouds", "aqi_change_rate",
-    ]
-    df[float_cols] = df[float_cols].astype("float64")
-    return df
 
 
-def get_previous_aqi(fg) -> float | None:
-    """Look up the most recent AQI value already stored, to compute change rate."""
+def get_previous_aqi_by_city(fg) -> dict:
+    """Look up the most recent AQI value already stored, per city, to
+    compute each city's change rate."""
     try:
         df = fg.read()
         if df.empty:
-            return None
+            return {}
         df = df.sort_values("event_time")
-        return float(df.iloc[-1]["aqi"])
+        latest = df.groupby("city").last()
+        return {city: float(row["aqi"]) for city, row in latest.iterrows()}
     except Exception as e:
         print(f"Could not read previous AQI (likely first run): {e}")
-        return None
+        return {}
 
 
-def push_to_feature_store(df: pd.DataFrame):
+def push_to_feature_store(rows: list[dict]):
     import hopsworks
 
     project = hopsworks.login(api_key_value=HOPSWORKS_API_KEY)
@@ -164,26 +163,28 @@ def push_to_feature_store(df: pd.DataFrame):
     fg = fs.get_or_create_feature_group(
         name=FEATURE_GROUP_NAME,
         version=FEATURE_GROUP_VERSION,
-        description="AQI + weather features for forecasting",
+        description="AQI + weather features for forecasting (multi-city)",
         primary_key=["city", "event_time"],
         event_time="event_time",
         time_travel_format="HUDI",
     )
 
-    # Recompute change rate using the true previous value from the store
-    previous_aqi = get_previous_aqi(fg)
-    df["aqi_change_rate"] = df["aqi"].iloc[0] - previous_aqi if previous_aqi is not None else 0.0
+    df = pd.DataFrame(rows)
+    float_cols = [
+        "aqi", "pm25", "pm10", "o3", "no2", "so2", "co",
+        "temperature", "humidity", "pressure", "wind_speed", "wind_deg",
+        "clouds", "aqi_change_rate",
+    ]
+    df[float_cols] = df[float_cols].astype("float64")
 
     try:
         fg.insert(df, wait=True)
-        print(f"Inserted 1 row into '{FEATURE_GROUP_NAME}' (v{FEATURE_GROUP_VERSION}) for {CITY_NAME}.")
+        print(f"Inserted {len(df)} row(s) into '{FEATURE_GROUP_NAME}' (v{FEATURE_GROUP_VERSION}).")
     except Exception as e:
         # Hopsworks' materialization job sometimes reports "FAILED" via its
         # job-status API even though the underlying Hudi write committed
-        # successfully (confirmed by checking the feature group's commit
-        # history in the Hopsworks UI). Treat this specific case as a
-        # warning rather than a hard failure so the pipeline doesn't
-        # falsely alarm on every run.
+        # successfully. Treat this specific case as a warning rather than a
+        # hard failure so the pipeline doesn't falsely alarm on every run.
         if "JobExecutionException" in type(e).__name__ or "Hopsworks Job failed" in str(e):
             print(
                 "WARNING: Hopsworks reported the materialization job as failed, "
@@ -208,14 +209,40 @@ def main():
         print(f"Missing required environment variables: {missing}")
         sys.exit(1)
 
-    print(f"Fetching data for {CITY_NAME} ({CITY_LAT}, {CITY_LON})...")
-    aqi_data = fetch_aqi_data(CITY_NAME)
-    weather_data = fetch_weather_data(CITY_LAT, CITY_LON)
+    import hopsworks
 
-    df = build_feature_row(aqi_data, weather_data, previous_aqi=None)
-    print(df.T)
+    project = hopsworks.login(api_key_value=HOPSWORKS_API_KEY)
+    fs = project.get_feature_store()
+    fg = fs.get_or_create_feature_group(
+        name=FEATURE_GROUP_NAME,
+        version=FEATURE_GROUP_VERSION,
+        description="AQI + weather features for forecasting (multi-city)",
+        primary_key=["city", "event_time"],
+        event_time="event_time",
+        time_travel_format="HUDI",
+    )
+    previous_by_city = get_previous_aqi_by_city(fg)
 
-    push_to_feature_store(df)
+    rows = []
+    for city in CITIES:
+        try:
+            print(f"Fetching data for {city['name']} ({city['lat']}, {city['lon']})...")
+            aqi_data = fetch_aqi_data(city["lat"], city["lon"])
+            weather_data = fetch_weather_data(city["lat"], city["lon"])
+            row = build_feature_row(
+                city["name"], aqi_data, weather_data, previous_by_city.get(city["name"])
+            )
+            rows.append(row)
+        except Exception as e:
+            # One city's API hiccup shouldn't take down the other two.
+            print(f"WARNING: failed to fetch data for {city['name']}: {e}")
+
+    if not rows:
+        print("No data fetched for any city — aborting.")
+        sys.exit(1)
+
+    print(pd.DataFrame(rows).T)
+    push_to_feature_store(rows)
 
 
 if __name__ == "__main__":
