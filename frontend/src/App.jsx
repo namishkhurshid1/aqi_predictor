@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { api } from './api'
 import Navbar from './components/Navbar.jsx'
 import GlobeView from './components/GlobeView.jsx'
+import CityTabs from './components/CityTabs.jsx'
 import StatCard from './components/StatCard.jsx'
 import PollutantStrip from './components/PollutantStrip.jsx'
 import ConditionsStrip from './components/ConditionsStrip.jsx'
@@ -10,11 +11,15 @@ import ForecastChart from './components/ForecastChart.jsx'
 import ShapCard from './components/ShapCard.jsx'
 import MetricsCard from './components/MetricsCard.jsx'
 
-// City coordinates for the globe marker — update if you change CITY_NAME
-// in your .env, since the API doesn't currently return lat/lon.
-const CITY_COORDS = { lat: 24.8607, lon: 67.0011 }
+const FALLBACK_CITIES = [
+  { name: 'Karachi', lat: 24.8607, lon: 67.0011 },
+  { name: 'Lahore', lat: 31.5497, lon: 74.3436 },
+  { name: 'Islamabad', lat: 33.6844, lon: 73.0479 },
+]
 
 export default function App() {
+  const [cities, setCities] = useState(FALLBACK_CITIES)
+  const [selectedCity, setSelectedCity] = useState('Karachi')
   const [current, setCurrent] = useState(null)
   const [forecast, setForecast] = useState(null)
   const [shap, setShap] = useState(null)
@@ -22,17 +27,26 @@ export default function App() {
   const [error, setError] = useState(null)
   const [loading, setLoading] = useState(true)
   const [now, setNow] = useState(new Date())
+  const [cityColors, setCityColors] = useState({})
 
-  async function loadAll() {
+  // Load the tracked city list once.
+  useEffect(() => {
+    api.cities().then((res) => {
+      if (res.cities?.length) setCities(res.cities)
+    }).catch(() => {})
+  }, [])
+
+  async function loadCity(city) {
     try {
       setLoading(true)
       setError(null)
       const [currentRes, forecastRes] = await Promise.all([
-        api.current(),
-        api.forecast(),
+        api.current(city),
+        api.forecast(city),
       ])
       setCurrent(currentRes)
       setForecast(forecastRes.forecast)
+      setCityColors((prev) => ({ ...prev, [city]: currentRes.alert.color }))
 
       api.shap().then(setShap).catch(() => setShap(null))
       api.metrics().then(setMetrics).catch(() => setMetrics(null))
@@ -44,13 +58,14 @@ export default function App() {
   }
 
   useEffect(() => {
-    loadAll()
-    const dataInterval = setInterval(loadAll, 5 * 60 * 1000)
+    loadCity(selectedCity)
+    const dataInterval = setInterval(() => loadCity(selectedCity), 5 * 60 * 1000)
+    return () => clearInterval(dataInterval)
+  }, [selectedCity])
+
+  useEffect(() => {
     const clockInterval = setInterval(() => setNow(new Date()), 1000)
-    return () => {
-      clearInterval(dataInterval)
-      clearInterval(clockInterval)
-    }
+    return () => clearInterval(clockInterval)
   }, [])
 
   const riskPct = current ? Math.min(100, Math.round((current.aqi / 300) * 100)) : 0
@@ -81,6 +96,8 @@ export default function App() {
                 {now.toLocaleDateString()} {now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} · {current.city}
               </div>
 
+              <CityTabs cities={cities} selectedCity={selectedCity} onSelectCity={setSelectedCity} />
+
               <div className="stat-cards">
                 <StatCard
                   label="Main Statistics"
@@ -104,10 +121,10 @@ export default function App() {
             </div>
 
             <GlobeView
-              lat={CITY_COORDS.lat}
-              lon={CITY_COORDS.lon}
-              color={current.alert.color}
-              city={current.city}
+              cities={cities}
+              selectedCity={selectedCity}
+              cityColors={cityColors}
+              onSelectCity={setSelectedCity}
             />
           </div>
 
