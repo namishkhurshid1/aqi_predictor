@@ -10,8 +10,9 @@ async function get(path) {
 }
 
 export const api = {
-  current: () => get('/current'),
-  forecast: () => get('/forecast'),
+  cities: () => get('/cities'),
+  current: (city) => get(`/current?city=${encodeURIComponent(city)}`),
+  forecast: (city) => get(`/forecast?city=${encodeURIComponent(city)}`),
   shap: () => get('/shap'),
   metrics: () => get('/metrics'),
 }
