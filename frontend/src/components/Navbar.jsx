@@ -1,10 +1,7 @@
 export default function Navbar({ city, now }) {
   return (
     <div className="navbar">
-      <div className="brand">
-        <img src="/logo.png" alt="10Pearls" className="brand-logo" />
-        Pearls AQI
-      </div>
+      <div className="brand">10Pearls AQI-Predictor</div>
       <nav>
         <span>Air Quality</span>
         <span>Forecast</span>
