@@ -94,7 +94,11 @@ def get_model_bundle():
 
     project = get_hopsworks_project()
     mr = project.get_model_registry()
-    model = mr.get_best_model(MODEL_NAME, "rmse", "min")
+    # Use the most recently trained model, not "best by RMSE" — early
+    # single-city models had misleadingly perfect scores due to overfitting
+    # on very small datasets, which would otherwise keep winning forever.
+    all_versions = mr.get_models(MODEL_NAME)
+    model = max(all_versions, key=lambda m: m.version)
     model_dir = model.download()
 
     bundle_path = os.path.join(model_dir, "model.pkl")
