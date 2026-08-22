@@ -4,6 +4,7 @@ import Navbar from './components/Navbar.jsx'
 import GlobeView from './components/GlobeView.jsx'
 import CityTabs from './components/CityTabs.jsx'
 import StatCard from './components/StatCard.jsx'
+import HealthRecommendations from './components/HealthRecommendations.jsx'
 import PollutantStrip from './components/PollutantStrip.jsx'
 import ConditionsStrip from './components/ConditionsStrip.jsx'
 import ForecastCard from './components/ForecastCard.jsx'
@@ -29,7 +30,6 @@ export default function App() {
   const [now, setNow] = useState(new Date())
   const [cityColors, setCityColors] = useState({})
 
-  // Load the tracked city list once.
   useEffect(() => {
     api.cities().then((res) => {
       if (res.cities?.length) setCities(res.cities)
@@ -128,6 +128,8 @@ export default function App() {
             />
           </div>
 
+          <HealthRecommendations aqi={current.aqi} />
+
           <PollutantStrip data={current} />
           <ConditionsStrip data={current} />
 
@@ -143,7 +145,7 @@ export default function App() {
       )}
 
       <div className="footer-note">
-        Pearls AQI Predictor — serverless forecasting pipeline · updates every hour
+        10Pearls AeroSense — serverless AQI forecasting pipeline · updates every hour
       </div>
     </div>
   )
