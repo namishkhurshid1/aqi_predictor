@@ -410,6 +410,40 @@ body {
   text-transform: capitalize;
 }
 
+.health-card .health-list {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.health-item {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 14px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--glass-border);
+  border-radius: 12px;
+}
+
+.health-icon {
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  background: rgba(240, 182, 76, 0.12);
+  color: var(--amber);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.health-text {
+  font-size: 13px;
+  color: var(--text);
+  line-height: 1.4;
+}
+
 /* ---------- states ---------- */
 
 .loading, .error {
