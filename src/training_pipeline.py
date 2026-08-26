@@ -34,7 +34,7 @@ except ImportError:
 
 HOPSWORKS_API_KEY = os.environ.get("HOPSWORKS_API_KEY")
 FEATURE_GROUP_NAME = "aqi_features"
-FEATURE_GROUP_VERSION = 4
+FEATURE_GROUP_VERSION = 5
 MODEL_NAME = "aqi_forecast_model"
 
 # Fixed, known city list (kept in sync with src/feature_pipeline.py and
