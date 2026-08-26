@@ -102,14 +102,14 @@ export default function App() {
                 <StatCard
                   label="Main Statistics"
                   big={Math.round(current.aqi)}
-                  sub={`Dominant pollutant: PM2.5`}
+                  sub={current.dominant_pollutant ? `Dominant pollutant: ${current.dominant_pollutant}` : 'Dominant pollutant: Unavailable'}
                   pill={current.alert.level}
                   pillColor={current.alert.color}
                 />
                 <StatCard
                   label="Risk of Pollution"
                   big={`${riskPct}%`}
-                  sub={current.alert.hazardous ? 'High risk — limit outdoor exposure' : 'Moderate risk based on current conditions'}
+                  sub={current.alert.description}
                   pill={current.alert.hazardous ? 'Hazardous' : 'Monitor'}
                   pillColor={current.alert.color}
                 />
