@@ -5,8 +5,8 @@ export default function ConditionsStrip({ data }) {
     { k: 'Temp', v: `${data.temperature?.toFixed(1)}°C` },
     { k: 'Humidity', v: `${data.humidity?.toFixed(0)}%` },
     { k: 'Wind', v: `${data.wind_speed?.toFixed(1)} m/s` },
-    { k: 'Pressure', v: data.pressure ? `${data.pressure.toFixed(0)} hPa` : 'n/a' },
-    { k: 'Clouds', v: data.clouds !== undefined ? `${data.clouds}%` : 'n/a' },
+    { k: 'Pressure', v: data.pressure ? `${data.pressure.toFixed(0)} hPa` : 'Unavailable' },
+    { k: 'Clouds', v: data.clouds !== null && data.clouds !== undefined ? `${data.clouds}%` : 'Unavailable' },
     { k: 'Updated', v: new Date(data.event_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) },
   ]
 
