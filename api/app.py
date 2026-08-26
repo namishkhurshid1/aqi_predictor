@@ -1,6 +1,6 @@
 """
-Flask API (multi-city)
-------------------------
+Flask API (multi-city, OpenWeather-only data)
+------------------------------------------------
 Loads the latest model from the Hopsworks Model Registry and the latest
 features from the Feature Store, and serves:
   GET  /api/health
@@ -31,7 +31,7 @@ except ImportError:
 
 HOPSWORKS_API_KEY = os.environ.get("HOPSWORKS_API_KEY")
 FEATURE_GROUP_NAME = "aqi_features"
-FEATURE_GROUP_VERSION = 4
+FEATURE_GROUP_VERSION = 5
 MODEL_NAME = "aqi_forecast_model"
 
 # Must match src/feature_pipeline.py and src/training_pipeline.py.
@@ -59,6 +59,52 @@ AQI_BREAKPOINTS = [
     (201, 300, "Very Unhealthy", "#8f3f97"),
     (301, 500, "Hazardous", "#7e0023"),
 ]
+
+AQI_DESCRIPTIONS = {
+    "Good": "Air quality is satisfactory, and air pollution poses little or no risk.",
+    "Moderate": "Air quality is acceptable. Some pollutants may be a moderate concern for a small number of unusually sensitive people.",
+    "Unhealthy for Sensitive Groups": "Members of sensitive groups may experience health effects. The general public is less likely to be affected.",
+    "Unhealthy": "Everyone may begin to experience health effects; sensitive groups may experience more serious effects.",
+    "Very Unhealthy": "Health alert: everyone may experience more serious health effects.",
+    "Hazardous": "Health warning of emergency conditions: everyone is more likely to be affected.",
+}
+
+# --- EPA AQI breakpoints, duplicated here (also in src/aqi_calc.py) so the
+# API has no cross-directory import dependency. AQI is derived from real
+# pollutant concentrations via the published EPA formula, not fabricated.
+PM25_BREAKPOINTS = [
+    (0.0, 12.0, 0, 50), (12.1, 35.4, 51, 100), (35.5, 55.4, 101, 150),
+    (55.5, 150.4, 151, 200), (150.5, 250.4, 201, 300),
+    (250.5, 350.4, 301, 400), (350.5, 500.4, 401, 500),
+]
+PM10_BREAKPOINTS = [
+    (0, 54, 0, 50), (55, 154, 51, 100), (155, 254, 101, 150),
+    (255, 354, 151, 200), (355, 424, 201, 300),
+    (425, 504, 301, 400), (505, 604, 401, 500),
+]
+
+
+def _sub_index(conc, breakpoints):
+    if conc is None or (isinstance(conc, float) and np.isnan(conc)):
+        return None
+    conc = max(0.0, float(conc))
+    for lo, hi, aqi_lo, aqi_hi in breakpoints:
+        if lo <= conc <= hi:
+            return ((aqi_hi - aqi_lo) / (hi - lo)) * (conc - lo) + aqi_lo
+    return 500.0
+
+
+def dominant_pollutant_for(pm25, pm10):
+    """Given stored pm25/pm10 concentrations, report which one drives the
+    AQI value (the one with the higher EPA sub-index), matching how real
+    monitoring stations report a dominant pollutant."""
+    pm25_aqi = _sub_index(pm25, PM25_BREAKPOINTS)
+    pm10_aqi = _sub_index(pm10, PM10_BREAKPOINTS)
+    candidates = [(v, name) for v, name in [(pm25_aqi, "PM2.5"), (pm10_aqi, "PM10")] if v is not None]
+    if not candidates:
+        return None
+    return max(candidates, key=lambda x: x[0])[1]
+
 
 app = Flask(__name__)
 CORS(app)
@@ -130,8 +176,13 @@ def predict_one(bundle, feature_row: pd.DataFrame) -> float:
 def classify_aqi(aqi: float) -> dict:
     for low, high, label, color in AQI_BREAKPOINTS:
         if low <= aqi <= high:
-            return {"level": label, "color": color, "hazardous": aqi > 150}
-    return {"level": "Unknown", "color": "#999999", "hazardous": False}
+            return {
+                "level": label,
+                "color": color,
+                "hazardous": aqi > 150,
+                "description": AQI_DESCRIPTIONS.get(label, ""),
+            }
+    return {"level": "Unknown", "color": "#999999", "hazardous": False, "description": ""}
 
 
 def resolve_city() -> str:
@@ -157,12 +208,17 @@ def current():
     if df.empty:
         return jsonify({"error": f"No data yet for {city}"}), 404
     row = df.iloc[0]
+
+    pm25 = float(row["pm25"]) if pd.notna(row["pm25"]) else None
+    pm10 = float(row["pm10"]) if pd.notna(row["pm10"]) else None
+
     result = {
         "city": city,
         "event_time": str(row["event_time"]),
         "aqi": float(row["aqi"]),
-        "pm25": float(row["pm25"]) if pd.notna(row["pm25"]) else None,
-        "pm10": float(row["pm10"]) if pd.notna(row["pm10"]) else None,
+        "dominant_pollutant": dominant_pollutant_for(pm25, pm10),
+        "pm25": pm25,
+        "pm10": pm10,
         "o3": float(row["o3"]) if pd.notna(row["o3"]) else None,
         "no2": float(row["no2"]) if pd.notna(row["no2"]) else None,
         "so2": float(row["so2"]) if pd.notna(row["so2"]) else None,
