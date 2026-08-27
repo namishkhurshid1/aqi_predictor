@@ -231,7 +231,13 @@ def main():
         sys.exit(1)
 
     print(pd.DataFrame(rows).T)
-    push_to_feature_store(rows)
+
+    # Insert one row at a time instead of batching all cities in one call —
+    # this isolates whether a multi-row commit is what's causing the
+    # materialization job to fail (single-row inserts were reliable before
+    # multi-city support was added).
+    for row in rows:
+        push_to_feature_store([row])
 
 
 if __name__ == "__main__":
