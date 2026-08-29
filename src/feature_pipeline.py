@@ -49,8 +49,7 @@ CITIES = [
 ]
 
 FEATURE_GROUP_NAME = "aqi_features"
-FEATURE_GROUP_VERSION = 5  # bumped: OpenWeather-only, single consistent data source
-
+FEATURE_GROUP_VERSION = 6  # bumped: online store enabled, bypasses flaky offline Spark job for serving
 
 def fetch_pollution_data(lat: float, lon: float) -> dict:
     """Real pollutant concentrations from OpenWeather's Air Pollution API.
@@ -162,6 +161,7 @@ def push_to_feature_store(rows: list[dict]):
         primary_key=["city", "event_time"],
         event_time="event_time",
         time_travel_format="HUDI",
+        online_enabled=True,
     )
 
     df = pd.DataFrame(rows)
