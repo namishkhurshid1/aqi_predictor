@@ -31,7 +31,7 @@ except ImportError:
 
 HOPSWORKS_API_KEY = os.environ.get("HOPSWORKS_API_KEY")
 FEATURE_GROUP_NAME = "aqi_features"
-FEATURE_GROUP_VERSION = 5
+FEATURE_GROUP_VERSION = 6
 MODEL_NAME = "aqi_forecast_model"
 
 # Must match src/feature_pipeline.py and src/training_pipeline.py.
@@ -123,7 +123,12 @@ def get_latest_features_for_city(city: str, n=1) -> pd.DataFrame:
     project = get_hopsworks_project()
     fs = project.get_feature_store()
     fg = fs.get_feature_group(name=FEATURE_GROUP_NAME, version=FEATURE_GROUP_VERSION)
-    df = fg.read()
+    # Read from the online store — a fast direct database lookup that
+    # doesn't depend on the offline Spark materialization job, which has
+    # been unreliable on the free tier. Online writes happen independently
+    # of that job, so this stays available even when offline reads/writes
+    # report failures.
+    df = fg.read(online=True)
     df = df[df["city"] == city].sort_values("event_time")
     return df.tail(n)
 
