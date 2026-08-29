@@ -34,7 +34,7 @@ except ImportError:
 
 HOPSWORKS_API_KEY = os.environ.get("HOPSWORKS_API_KEY")
 FEATURE_GROUP_NAME = "aqi_features"
-FEATURE_GROUP_VERSION = 5
+FEATURE_GROUP_VERSION = 6
 MODEL_NAME = "aqi_forecast_model"
 
 # Fixed, known city list (kept in sync with src/feature_pipeline.py and
@@ -65,7 +65,11 @@ def load_features_from_hopsworks() -> pd.DataFrame:
     project = hopsworks.login(api_key_value=HOPSWORKS_API_KEY)
     fs = project.get_feature_store()
     fg = fs.get_feature_group(name=FEATURE_GROUP_NAME, version=FEATURE_GROUP_VERSION)
-    df = fg.read()
+    # Read from the online store rather than the offline Spark path, which
+    # has been unreliable on the free tier. Since our primary key includes
+    # event_time (not just city), every row is unique, so the online store
+    # retains full history here rather than just the latest value per city.
+    df = fg.read(online=True)
     df = add_city_dummies(df)
     df = df.dropna(subset=BASE_FEATURE_COLUMNS + [TARGET_COLUMN])
     return df, project
