@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { api } from './api'
 import Navbar from './components/Navbar.jsx'
-import GlobeView from './components/GlobeView.jsx'
+import PakistanMap from './components/PakistanMap.jsx'
 import CityTabs from './components/CityTabs.jsx'
 import StatCard from './components/StatCard.jsx'
 import HealthRecommendations from './components/HealthRecommendations.jsx'
@@ -120,7 +120,7 @@ export default function App() {
               )}
             </div>
 
-            <GlobeView
+            <PakistanMap
               cities={cities}
               selectedCity={selectedCity}
               cityColors={cityColors}
