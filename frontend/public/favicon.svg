@@ -1,13 +1,13 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
   <rect width="64" height="64" rx="14" fill="#0c1024"/>
 
-  <!-- wind swirls -->
-  <path d="M10 20h14M10 26h20" stroke="#4f7cff" stroke-width="2.4" stroke-linecap="round" fill="none"/>
-  <path d="M36 20h8a4 4 0 100-8" stroke="#7c6cf0" stroke-width="2.4" stroke-linecap="round" fill="none"/>
-  <path d="M40 26h6a3.5 3.5 0 110 7" stroke="#4cd3b0" stroke-width="2.4" stroke-linecap="round" fill="none"/>
+  <!-- bold gauge arc -->
+  <path d="M12 44a20 20 0 0140 0" stroke="#f0b64c" stroke-width="7" stroke-linecap="round" fill="none"/>
 
-  <!-- gauge -->
-  <path d="M16 46a16 16 0 0132 0" stroke="#f0b64c" stroke-width="3" stroke-linecap="round" fill="none"/>
-  <path d="M32 46l7-9" stroke="#fff" stroke-width="3" stroke-linecap="round"/>
-  <circle cx="32" cy="46" r="2.4" fill="#fff"/>
+  <!-- needle -->
+  <path d="M32 44l10-13" stroke="#ffffff" stroke-width="6" stroke-linecap="round"/>
+  <circle cx="32" cy="44" r="5" fill="#7c6cf0"/>
+
+  <!-- single bold wind swoosh -->
+  <path d="M14 16h22a5 5 0 100-10" stroke="#4cd3b0" stroke-width="5" stroke-linecap="round" fill="none"/>
 </svg>
