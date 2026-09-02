@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react'
 import { api } from './api'
 import Navbar from './components/Navbar.jsx'
 import PakistanMap from './components/PakistanMap.jsx'
-import CityTabs from './components/CityTabs.jsx'
 import StatCard from './components/StatCard.jsx'
 import HealthRecommendations from './components/HealthRecommendations.jsx'
 import PollutantStrip from './components/PollutantStrip.jsx'
@@ -17,6 +16,21 @@ const FALLBACK_CITIES = [
   { name: 'Lahore', lat: 31.5497, lon: 74.3436 },
   { name: 'Islamabad', lat: 33.6844, lon: 73.0479 },
 ]
+
+const GaugeIcon = (
+  <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.6">
+    <path d="M4 15a8 8 0 1116 0" strokeLinecap="round" />
+    <path d="M12 15l4-5" strokeLinecap="round" />
+    <circle cx="12" cy="15" r="1.2" fill="currentColor" stroke="none" />
+  </svg>
+)
+
+const ShieldIcon = (
+  <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.6">
+    <path d="M12 3l7 3v6c0 4.5-3 8-7 9-4-1-7-4.5-7-9V6l7-3z" strokeLinejoin="round" />
+    <path d="M9.5 12l1.8 1.8L15 10" strokeLinecap="round" strokeLinejoin="round" />
+  </svg>
+)
 
 export default function App() {
   const [cities, setCities] = useState(FALLBACK_CITIES)
@@ -93,13 +107,12 @@ export default function App() {
                 Air Quality <span>Index</span>
               </h1>
               <div className="hero-meta">
-                {now.toLocaleDateString()} {now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} · {current.city}
+                {now.toLocaleDateString()} {now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} · Click a city on the map to switch →
               </div>
-
-              <CityTabs cities={cities} selectedCity={selectedCity} onSelectCity={setSelectedCity} />
 
               <div className="stat-cards">
                 <StatCard
+                  icon={GaugeIcon}
                   label="Main Statistics"
                   big={Math.round(current.aqi)}
                   sub={current.dominant_pollutant ? `Dominant pollutant: ${current.dominant_pollutant}` : 'Dominant pollutant: Unavailable'}
@@ -107,6 +120,7 @@ export default function App() {
                   pillColor={current.alert.color}
                 />
                 <StatCard
+                  icon={ShieldIcon}
                   label="Risk of Pollution"
                   big={`${riskPct}%`}
                   sub={current.alert.description}
