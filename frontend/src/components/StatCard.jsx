@@ -1,7 +1,10 @@
-export default function StatCard({ label, big, sub, pill, pillColor }) {
+export default function StatCard({ label, big, sub, pill, pillColor, icon }) {
   return (
     <div className="stat-card">
-      <div className="label">{label}</div>
+      <div className="stat-card-top">
+        <div className="label">{label}</div>
+        {icon && <div className="stat-icon" style={{ color: pillColor }}>{icon}</div>}
+      </div>
       <div className="row">
         <div className="big">{big}</div>
         {pill && (
