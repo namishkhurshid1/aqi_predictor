@@ -142,6 +142,12 @@ def train_lstm(X_train, y_train, X_test, y_test):
 def compute_shap_summary(rf_model, X_train) -> dict:
     explainer = shap.TreeExplainer(rf_model)
     shap_values = explainer.shap_values(X_train)
+    # Some shap/sklearn version combinations return a list (one array per
+    # output) even for single-output regressors — normalize to a plain
+    # array so importance isn't silently miscomputed as all zeros.
+    if isinstance(shap_values, list):
+        shap_values = shap_values[0]
+    shap_values = np.array(shap_values)
     mean_abs_shap = np.abs(shap_values).mean(axis=0)
     importance = dict(zip(FEATURE_COLUMNS, mean_abs_shap.tolist()))
     return dict(sorted(importance.items(), key=lambda x: x[1], reverse=True))
@@ -208,6 +214,13 @@ def main():
         lstm_model.save("artifacts/lstm_model.keras")
         joblib.dump({"scaler": lstm_scaler}, "artifacts/model.pkl")
         model_type = "tensorflow_lstm"
+
+    # Always save the Random Forest separately as a dedicated explainer,
+    # regardless of which model actually wins on RMSE. This lets the API
+    # compute a live, per-prediction SHAP explanation for whatever reading
+    # is being viewed, even when the deployed model (Ridge/LSTM) isn't
+    # natively tree-based and can't use SHAP's fast TreeExplainer.
+    joblib.dump(rf_model, "artifacts/explainer_model.pkl")
 
     push_model_to_registry(project, model_type, results[best_name])
 
