@@ -19,6 +19,7 @@ import json
 import joblib
 import numpy as np
 import pandas as pd
+import shap
 from datetime import datetime, timedelta, timezone
 from flask import Flask, jsonify, request
 from flask_cors import CORS
@@ -160,8 +161,61 @@ def get_model_bundle():
         import tensorflow as tf
         bundle["lstm"] = tf.keras.models.load_model(lstm_path)
 
+    explainer_path = os.path.join(model_dir, "explainer_model.pkl")
+    if os.path.exists(explainer_path):
+        bundle["explainer_model"] = joblib.load(explainer_path)
+
     _cache["model_bundle"] = bundle
     return bundle
+
+
+FEATURE_LABELS = {
+    "pm25": "PM2.5 level",
+    "temperature": "Temperature",
+    "humidity": "Humidity",
+    "pressure": "Air pressure",
+    "wind_speed": "Wind speed",
+    "wind_deg": "Wind direction",
+    "clouds": "Cloud cover",
+    "hour": "Time of day",
+    "day": "Day of month",
+    "day_of_week": "Day of week",
+    "month": "Month",
+    "aqi_change_rate": "Recent AQI trend",
+    "city_Islamabad": "Location (Islamabad)",
+    "city_Karachi": "Location (Karachi)",
+    "city_Lahore": "Location (Lahore)",
+}
+
+
+def explain_prediction(bundle, feature_row: pd.DataFrame, top_n=6) -> list:
+    """Live, per-prediction SHAP explanation for the exact reading being
+    shown — not a generic global average — using the dedicated Random
+    Forest explainer trained alongside the deployed model."""
+    if "explainer_model" not in bundle:
+        return []
+
+    X = feature_row[FEATURE_COLUMNS]
+    explainer = shap.TreeExplainer(bundle["explainer_model"])
+    shap_values = explainer.shap_values(X)
+    if isinstance(shap_values, list):
+        shap_values = shap_values[0]
+    shap_values = np.array(shap_values)[0]  # single row
+
+    contributions = []
+    for col, val in zip(FEATURE_COLUMNS, shap_values):
+        if col.startswith("city_"):
+            continue  # not meaningful to explain to the user per-request
+        contributions.append({
+            "feature": col,
+            "label": FEATURE_LABELS.get(col, col),
+            "value": round(float(X.iloc[0][col]), 2),
+            "impact": round(float(val), 2),
+            "direction": "increases" if val > 0 else "decreases",
+        })
+
+    contributions.sort(key=lambda c: abs(c["impact"]), reverse=True)
+    return contributions[:top_n]
 
 
 def predict_one(bundle, feature_row: pd.DataFrame) -> float:
@@ -271,6 +325,24 @@ def forecast():
         working_row["aqi"] = pred_aqi
 
     return jsonify({"city": city, "forecast": forecasts})
+
+@app.route("/api/explain")
+def explain():
+    city = resolve_city()
+    df = get_latest_features_for_city(city, n=1)
+    if df.empty:
+        return jsonify({"error": f"No data yet for {city}"}), 404
+
+    row = df.iloc[[0]].copy()
+    row = add_city_dummies(row, city)
+
+    try:
+        bundle = get_model_bundle()
+        contributions = explain_prediction(bundle, row)
+    except Exception as e:
+        return jsonify({"error": f"Could not compute explanation: {e}"}), 500
+
+    return jsonify({"city": city, "contributions": contributions})
 
 
 @app.route("/api/shap")
