@@ -4,6 +4,7 @@ import Navbar from './components/Navbar.jsx'
 import PakistanMap from './components/PakistanMap.jsx'
 import StatCard from './components/StatCard.jsx'
 import HealthRecommendations from './components/HealthRecommendations.jsx'
+import WhyExplanation from './components/WhyExplanation.jsx'
 import PollutantStrip from './components/PollutantStrip.jsx'
 import ConditionsStrip from './components/ConditionsStrip.jsx'
 import ForecastCard from './components/ForecastCard.jsx'
@@ -143,6 +144,8 @@ export default function App() {
           </div>
 
           <HealthRecommendations aqi={current.aqi} />
+
+          <WhyExplanation city={selectedCity} />
 
           <PollutantStrip data={current} />
           <ConditionsStrip data={current} />

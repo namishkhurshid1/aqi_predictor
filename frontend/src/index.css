@@ -481,6 +481,79 @@ body {
 }
 
 /* ---------- states ---------- */
+.why-intro {
+  font-size: 13px;
+  color: var(--text-dim);
+  margin-bottom: 18px;
+  line-height: 1.5;
+}
+
+.why-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.why-row {
+  display: grid;
+  grid-template-columns: 180px 1fr 90px;
+  align-items: center;
+  gap: 12px;
+}
+
+@media (max-width: 720px) {
+  .why-row {
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+}
+
+.why-label {
+  font-size: 13px;
+  color: var(--text);
+}
+
+.why-value {
+  color: var(--text-dim);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  margin-left: 6px;
+}
+
+.why-bar-track {
+  height: 6px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.06);
+  overflow: hidden;
+}
+
+.why-bar-fill {
+  height: 100%;
+  border-radius: 3px;
+}
+
+.why-bar-fill.up {
+  background: var(--rose);
+}
+
+.why-bar-fill.down {
+  background: var(--teal);
+}
+
+.why-impact {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 600;
+  text-align: right;
+}
+
+.why-impact.up {
+  color: var(--rose);
+}
+
+.why-impact.down {
+  color: var(--teal);
+}
 
 .loading, .error {
   color: var(--text-dim);

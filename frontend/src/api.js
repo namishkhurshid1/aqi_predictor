@@ -13,6 +13,7 @@ export const api = {
   cities: () => get('/cities'),
   current: (city) => get(`/current?city=${encodeURIComponent(city)}`),
   forecast: (city) => get(`/forecast?city=${encodeURIComponent(city)}`),
+  explain: (city) => get(`/explain?city=${encodeURIComponent(city)}`),
   shap: () => get('/shap'),
   metrics: () => get('/metrics'),
 }
