@@ -156,8 +156,14 @@ def get_model_bundle():
     bundle_path = os.path.join(model_dir, "model.pkl")
     bundle = joblib.load(bundle_path)
 
+    # Only treat this as an LSTM model if model.pkl itself has no "model"
+    # key — that's the save-time signature of an LSTM-winning training run
+    # (see training_pipeline.py). Checking bundle content instead of just
+    # file existence avoids loading a STALE lstm_model.keras file left
+    # over in a reused local download cache from a previous model version
+    # that happened to be LSTM, even when the current version isn't.
     lstm_path = os.path.join(model_dir, "lstm_model.keras")
-    if os.path.exists(lstm_path):
+    if "model" not in bundle and os.path.exists(lstm_path):
         import tensorflow as tf
         bundle["lstm"] = tf.keras.models.load_model(lstm_path)
 
@@ -220,11 +226,11 @@ def explain_prediction(bundle, feature_row: pd.DataFrame, top_n=6) -> list:
 
 def predict_one(bundle, feature_row: pd.DataFrame) -> float:
     X = feature_row[FEATURE_COLUMNS]
-    if "lstm" in bundle:
+    if "lstm" in bundle and bundle.get("scaler") is not None:
         X_s = bundle["scaler"].transform(X)
         X_seq = X_s.reshape((X_s.shape[0], 1, X_s.shape[1]))
         pred = bundle["lstm"].predict(X_seq, verbose=0).flatten()[0]
-    elif bundle["scaler"] is not None:
+    elif bundle.get("scaler") is not None and "model" in bundle:
         X_s = bundle["scaler"].transform(X)
         pred = bundle["model"].predict(X_s)[0]
     else:
