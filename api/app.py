@@ -110,8 +110,7 @@ def dominant_pollutant_for(pm25, pm10):
 app = Flask(__name__)
 CORS(app)
 
-_cache = {"project": None, "model_bundle": None}
-
+_cache = {"project": None, "model_bundle": None, "model_dir": None}
 
 def get_hopsworks_project():
     import hopsworks
@@ -152,6 +151,7 @@ def get_model_bundle():
     all_versions = mr.get_models(MODEL_NAME)
     model = max(all_versions, key=lambda m: m.version)
     model_dir = model.download()
+    _cache["model_dir"] = model_dir
 
     bundle_path = os.path.join(model_dir, "model.pkl")
     bundle = joblib.load(bundle_path)
@@ -353,23 +353,30 @@ def explain():
 
 @app.route("/api/shap")
 def shap_importance():
-    path = os.path.join("artifacts", "shap_importance.json")
-    if not os.path.exists(path):
-        return jsonify({"error": "No SHAP data yet. Run training_pipeline.py first."}), 404
-    with open(path) as f:
-        data = json.load(f)
-    return jsonify(data)
+    try:
+        get_model_bundle()  # ensures model_dir is populated
+        path = os.path.join(_cache["model_dir"], "shap_importance.json")
+        if not os.path.exists(path):
+            return jsonify({"error": "No SHAP data in the current model version."}), 404
+        with open(path) as f:
+            data = json.load(f)
+        return jsonify(data)
+    except Exception as e:
+        return jsonify({"error": f"Could not load SHAP data: {e}"}), 500
 
 
 @app.route("/api/metrics")
 def metrics():
-    path = os.path.join("artifacts", "metrics.json")
-    if not os.path.exists(path):
-        return jsonify({"error": "No metrics yet. Run training_pipeline.py first."}), 404
-    with open(path) as f:
-        data = json.load(f)
-    return jsonify(data)
-
+    try:
+        get_model_bundle()  # ensures model_dir is populated
+        path = os.path.join(_cache["model_dir"], "metrics.json")
+        if not os.path.exists(path):
+            return jsonify({"error": "No metrics in the current model version."}), 404
+        with open(path) as f:
+            data = json.load(f)
+        return jsonify(data)
+    except Exception as e:
+        return jsonify({"error": f"Could not load metrics: {e}"}), 500
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
