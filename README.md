@@ -1,7 +1,6 @@
 # 10Pearls AeroSense — AQI Predictor
 
-End-to-end, serverless AQI forecasting system for **Karachi, Lahore, and Islamabad**
-Automated data collection, feature engineering, model training, and a real-time React dashboard with live SHAP explainability.
+End-to-end, serverless AQI forecasting system for **Karachi, Lahore, and Islamabad**. Automated data collection, feature engineering, model training, and a real-time React dashboard with live SHAP explainability.
 
 **🔴 Live site:** https://aqi-predictor-frontend-dcsw.onrender.com/
 
